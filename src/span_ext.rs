@@ -133,6 +133,7 @@ pub trait OpenTelemetrySpanExt {
     /// app_root.set_attribute("http.request.header.x_forwarded_for", "example");
     /// ```
     fn set_attribute(&self, key: impl Into<Key>, value: impl Into<Value>);
+    fn parent_context(&self) -> Context;
 }
 
 impl OpenTelemetrySpanExt for tracing::Span {
@@ -206,5 +207,16 @@ impl OpenTelemetrySpanExt for tracing::Span {
                 })
             }
         });
+    }
+    fn parent_context(&self) -> Context {
+        let mut cx = None;
+        self.with_subscriber(|(id, subscriber)| {
+            if let Some(get_context) = subscriber.downcast_ref::<WithContext>() {
+                get_context.with_context(subscriber, id, |builder, _tracer| {
+                    cx = Some(builder.parent_cx.clone());
+                })
+            }
+        });
+        cx.unwrap_or_default()
     }
 }
